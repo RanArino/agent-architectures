@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agent Flow Visualizer</title>
+<style>
+  :root {
+    --bg: #0f1419; --panel: #161c24; --panel-2: #1d2530; --line: #2a3441;
+    --ink: #e6edf3; --muted: #8b98a8; --ctrl: #4493f8; --spec: #e3a008;
+    --cross: #a371f7; --good: #3fb950; --bad: #f85149; --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header { padding: 22px 26px 12px; border-bottom: 1px solid var(--line); }
+  h1 { margin: 0 0 4px; font-size: 21px; }
+  .sub { color: var(--muted); font-size: 14px; max-width: 760px; }
+  main { padding: 20px 26px 60px; max-width: 1180px; margin: 0 auto; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-bottom: 8px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  select, button {
+    font: inherit; color: var(--ink); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 13px; cursor: pointer;
+  }
+  select { min-width: 360px; }
+  button:hover { border-color: var(--ctrl); }
+  button.primary { background: var(--ctrl); border-color: var(--ctrl); color: #06101f; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .banner { padding: 11px 14px; border-radius: 8px; margin: 14px 0; font-size: 14px; }
+  .banner.warn { background: #2a210e; border: 1px solid var(--spec); color: #f0d28a; }
+  .banner.info { background: #10202f; border: 1px solid var(--line); color: var(--muted); }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 10px 0 4px; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .dot.ctrl { background: var(--ctrl); } .dot.spec { background: var(--spec); } .dot.cross { background: var(--cross); }
+
+  .result { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-top: 22px; }
+  .result h2 { margin: 0 0 2px; font-size: 17px; }
+  .lesson { color: var(--muted); font-size: 13.5px; margin-bottom: 12px; }
+  .answer { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 11px 13px; margin: 10px 0 14px; }
+  .answer .who { font-size: 12px; color: var(--good); text-transform: uppercase; letter-spacing: .04em; }
+  .observe { font-size: 13px; color: var(--ctrl); margin: 0 0 14px; }
+
+  .lane { display: flex; flex-direction: column; gap: 7px; }
+  .row { display: grid; gap: 8px; align-items: stretch; }
+  .colhead { font-size: 12px; color: var(--muted); padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  .colhead b { color: var(--ink); }
+  .tag { font-size: 10px; padding: 1px 6px; border-radius: 99px; margin-left: 6px; vertical-align: middle; }
+  .tag.ctrl { background: #12283f; color: var(--ctrl); } .tag.spec { background: #2c2308; color: var(--spec); }
+
+  .cell { min-height: 4px; }
+  .card { border-radius: 8px; padding: 8px 10px; font-size: 13px; border: 1px solid var(--line); }
+  .card.ctx { background: var(--panel-2); }
+  .card.ctx.ctrl { border-left: 3px solid var(--ctrl); }
+  .card.ctx.spec { border-left: 3px solid var(--spec); }
+  .card .hd { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .card .hd b { font-weight: 600; }
+  .grow { font-size: 11px; color: var(--good); }
+  details.msgs { margin-top: 6px; }
+  details.msgs summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  .msg { font-size: 12px; color: var(--muted); padding: 3px 0; border-top: 1px dashed var(--line); white-space: pre-wrap; word-break: break-word; }
+  .msg .role { color: var(--ink); font-weight: 600; }
+
+  .pill { display: inline-block; font-size: 12px; padding: 5px 9px; border-radius: 7px; background: #182233; border: 1px solid var(--line); }
+  .pill .k { color: var(--spec); font-weight: 600; }
+  .cross { grid-column: 1 / -1; text-align: center; font-size: 12.5px; padding: 7px;
+           background: #1c1430; border: 1px dashed var(--cross); color: #cdb4ff; border-radius: 7px; }
+
+  table.metrics { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+  table.metrics th, table.metrics td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+  table.metrics th:first-child, table.metrics td:first-child { text-align: left; }
+  table.metrics th { color: var(--muted); font-weight: 500; }
+
+  .map { margin-top: 30px; font-size: 13px; }
+  .map table { border-collapse: collapse; }
+  .map td, .map th { border: 1px solid var(--line); padding: 8px 12px; }
+  .map th { color: var(--muted); font-weight: 500; }
+  .map td.on { background: #12283f; color: var(--ctrl); }
+
+  .compare-tokens { margin-top: 22px; }
+  .bar-row { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 10px; margin: 6px 0; }
+  .bar-row .lbl { font-size: 12.5px; color: var(--muted); }
+  .bars { display: flex; flex-direction: column; gap: 4px; }
+  .bar { height: 16px; border-radius: 4px; display: flex; align-items: center; padding-left: 6px; font-size: 11px; color: #06101f; white-space: nowrap; min-width: 2px; }
+  .bar.all { background: var(--spec); } .bar.ctrl { background: var(--ctrl); }
+  .spin { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Agent Flow Visualizer</h1>
+  <div class="sub">
+    The same task, run through three multi-agent patterns — so you can <em>see</em> what is
+    usually a black box: where each agent's context window grows, what crosses between agents,
+    and who ends up owning the answer.
+  </div>
+</header>
+
+<main>
+  <div id="status"></div>
+
+  <div class="controls">
+    <div class="field">
+      <label for="task">Task</label>
+      <select id="task"></select>
+    </div>
+    <div class="field">
+      <label>Run one architecture</label>
+      <div class="btn-row" id="arch-buttons"></div>
+    </div>
+    <div class="field">
+      <label>&nbsp;</label>
+      <button class="primary" id="run-all">Run all three (compare)</button>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i class="dot ctrl"></i> controller (decides &amp; delegates)</span>
+    <span><i class="dot spec"></i> worker / specialist (does the reading)</span>
+    <span><i class="dot cross"></i> something crosses the boundary (summary / handoff)</span>
+  </div>
+
+  <div id="output"></div>
+</main>
+
+<script>
+const LESSON = {
+  "single-loop": "One agent, one window. Every tool result piles into the same context — watch it grow.",
+  "orchestrator": "A manager delegates to workers in isolated windows and reads only their summaries. The manager's window stays small; the raw results live in the workers.",
+  "handoff": "Triage hands control to a specialist that takes over the conversation and owns the final answer. Watch where control crosses.",
+};
+const CROSSING_EVENTS = new Set(["worker summary", "handoff"]);
+const MAX_PEEK = 260;
+
+const el = (tag, cls, html) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; };
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+let META = null;
+
+async function loadMeta() {
+  META = await (await fetch("/api/meta")).json();
+  const task = document.getElementById("task");
+  task.innerHTML = META.tasks.map((t) => `<option value="${t.id}">${esc(t.id)} — ${esc(t.question)}</option>`).join("");
+
+  const buttons = document.getElementById("arch-buttons");
+  buttons.innerHTML = "";
+  META.architectures.forEach((name) => {
+    const b = el("button", null, esc(name));
+    b.onclick = () => runOne(name);
+    buttons.appendChild(b);
+  });
+
+  const status = document.getElementById("status");
+  if (!META.key_present) {
+    status.innerHTML = `<div class="banner warn">No <code>OPENAI_API_KEY</code> detected. The UI and mocked tools work, but live model
+      runs need a key. Stop the server, <code>export OPENAI_API_KEY=...</code>, and relaunch.</div>`;
+  } else {
+    status.innerHTML = `<div class="banner info">Live runs use model <b>${esc(META.model)}</b>. Tools are mocked (no network, no Scaler).</div>`;
+  }
+}
+
+function roleOf(agent, roles) {
+  if (agent === roles.controller) return "ctrl";
+  return roles.specialists.includes(agent) ? "spec" : "ctrl";
+}
+
+function columnsOf(result) {
+  const appeared = [];                                    // agents that actually ran, in order
+  result.steps.forEach((s) => { if (!appeared.includes(s.agent)) appeared.push(s.agent); });
+  const ordered = appeared.includes(result.roles.controller) ? [result.roles.controller] : [];
+  appeared.forEach((a) => { if (!ordered.includes(a)) ordered.push(a); });   // controller first, rest by appearance
+  return ordered;
+}
+
+function observe(result) {
+  const ctxByAgent = {};
+  result.steps.filter((s) => s.kind === "context").forEach((s) => {
+    ctxByAgent[s.agent] = ctxByAgent[s.agent] || [];
+    ctxByAgent[s.agent].push(s.approx_tokens);
+  });
+  const peak = (a) => Math.max(0, ...(ctxByAgent[a] || [0]));
+  if (result.architecture === "single-loop") {
+    const seq = ctxByAgent["single-agent"] || [0];
+    return `Observed: the one window went from ~${seq[0]} to ~${seq[seq.length - 1]} tokens as tool results accreted.`;
+  }
+  if (result.architecture === "orchestrator") {
+    const ctrl = peak(result.roles.controller);
+    const worker = Math.max(0, ...result.roles.specialists.map(peak));
+    return `Observed: the manager's largest window was ~${ctrl} tok; a worker's was ~${worker} tok — the raw results stayed in the worker.`;
+  }
+  return `Observed: control ended at "${result.final_agent}", which owns the final answer (triage did not).`;
+}
+
+function contextCard(step, role, prevCount) {
+  const grew = prevCount != null && step.count > prevCount;
+  const card = el("div", `card ctx ${role}`);
+  card.appendChild(el("div", "hd",
+    `<b>${esc(step.agent)}</b><span>${step.count} msgs · ~${step.approx_tokens} tok` +
+    (grew ? ` <span class="grow">▲ +${step.count - prevCount}</span>` : "") + `</span>`));
+  const details = el("details", "msgs");
+  details.appendChild(el("summary", null, "peek into the window"));
+  step.messages.forEach((m) => {
+    const text = m.content.length > MAX_PEEK ? m.content.slice(0, MAX_PEEK) + "…" : m.content;
+    const who = m.name ? `${m.role}/${m.name}` : m.role;
+    details.appendChild(el("div", "msg", `<span class="role">${esc(who)}:</span> ${esc(text)}`));
+  });
+  card.appendChild(details);
+  return card;
+}
+
+function eventPill(step) {
+  return el("div", "pill", `<span class="k">${esc(step.event)}</span> ${esc(step.detail)}`);
+}
+
+function renderLane(result) {
+  const cols = columnsOf(result);
+  const tmpl = `grid-template-columns: repeat(${cols.length}, 1fr)`;
+  const lane = el("div", "lane");
+
+  const head = el("div", "row");
+  head.setAttribute("style", tmpl);
+  cols.forEach((agent) => {
+    const role = roleOf(agent, result.roles);
+    head.appendChild(el("div", "colhead", `<b>${esc(agent)}</b><span class="tag ${role}">${role === "ctrl" ? "controls" : "worker"}</span>`));
+  });
+  lane.appendChild(head);
+
+  const lastCount = {};
+  result.steps.forEach((step) => {
+    const row = el("div", "row");
+    row.setAttribute("style", tmpl);
+    if (step.kind === "event" && CROSSING_EVENTS.has(step.event)) {
+      row.appendChild(el("div", "cross", `⇄ ${esc(step.event)} — ${esc(step.detail)}`));
+      lane.appendChild(row);
+      return;
+    }
+    cols.forEach((agent) => {
+      const cell = el("div", "cell");
+      if (agent === step.agent) {
+        if (step.kind === "context") {
+          cell.appendChild(contextCard(step, roleOf(agent, result.roles), lastCount[agent]));
+          lastCount[agent] = step.count;
+        } else {
+          cell.appendChild(eventPill(step));
+        }
+      }
+      row.appendChild(cell);
+    });
+    lane.appendChild(row);
+  });
+  return lane;
+}
+
+function renderMetrics(result) {
+  const rows = result.metrics.map((m) => {
+    const cost = m.cost_usd == null ? "n/a" : "$" + m.cost_usd.toFixed(6);
+    return `<tr><td>${esc(m.agent)}</td><td>${m.input_tokens}</td><td>${m.output_tokens}</td>
+      <td>${m.total_tokens}</td><td>${cost}</td><td>${m.latency_ms.toFixed(1)}</td></tr>`;
+  }).join("");
+  return el("table", "metrics",
+    `<thead><tr><th>agent</th><th>in</th><th>out</th><th>total tok</th><th>est. cost</th><th>latency ms</th></tr></thead><tbody>${rows}</tbody>`);
+}
+
+function renderResult(result) {
+  const box = el("div", "result");
+  box.appendChild(el("h2", null, esc(result.architecture)));
+  box.appendChild(el("div", "lesson", esc(LESSON[result.architecture] || "")));
+  box.appendChild(el("div", "answer",
+    `<div class="who">answer · owned by ${esc(result.final_agent)}</div>${esc(result.answer)}`));
+  box.appendChild(el("p", "observe", esc(observe(result))));
+  box.appendChild(renderLane(result));
+  box.appendChild(renderMetrics(result));
+  return box;
+}
+
+function tokensFor(result) {
+  const total = result.metrics.reduce((s, m) => s + m.total_tokens, 0);
+  const ctrl = result.metrics.filter((m) => m.agent === result.roles.controller).reduce((s, m) => s + m.total_tokens, 0);
+  return { total, ctrl };
+}
+
+function renderTokenCompare(results) {
+  const peak = Math.max(1, ...results.map((r) => tokensFor(r).total));
+  const block = el("div", "compare-tokens");
+  block.appendChild(el("h2", null, "Token cost, side by side"));
+  block.appendChild(el("div", "lesson",
+    "Blue = the controller's own window. Amber = every agent combined. The orchestrator's controller bar stays short even when its total is comparable — that is context isolation, measured."));
+  results.forEach((r) => {
+    const t = tokensFor(r);
+    const row = el("div", "bar-row");
+    row.appendChild(el("div", "lbl", esc(r.architecture)));
+    const bars = el("div", "bars");
+    bars.appendChild(el("div", "bar all", `all agents: ${t.total}`)).style.width = (100 * t.total / peak) + "%";
+    bars.appendChild(el("div", "bar ctrl", `controller: ${t.ctrl}`)).style.width = (100 * t.ctrl / peak) + "%";
+    row.appendChild(bars);
+    block.appendChild(row);
+  });
+  return block;
+}
+
+function renderAxisMap(active) {
+  const rows = [
+    ["single-loop", "central", "one growing window"],
+    ["orchestrator", "central", "isolated worker summaries"],
+    ["handoff", "transferred", "filtered conversation history"],
+  ];
+  const body = rows.map(([a, ctrl, ctx]) => {
+    const on = active.includes(a) ? " class=\"on\"" : "";
+    return `<tr><td${on}>${a}</td><td>${ctrl}</td><td>${ctx}</td></tr>`;
+  }).join("");
+  return el("div", "map",
+    `<h2>The two axes, filled in by these runs</h2>
+     <table><thead><tr><th>architecture</th><th>control location</th><th>context ownership</th></tr></thead>
+     <tbody>${body}</tbody></table>`);
+}
+
+async function fetchRun(architecture, task) {
+  const res = await fetch("/api/run", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ architecture, task }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+function setBusy(busy) {
+  document.querySelectorAll("button").forEach((b) => { b.disabled = busy; });
+}
+
+async function runOne(architecture) {
+  const task = document.getElementById("task").value;
+  const out = document.getElementById("output");
+  out.innerHTML = "";
+  out.appendChild(el("p", "spin", `Running ${esc(architecture)} on "${esc(task)}"… (one or more live model calls)`));
+  setBusy(true);
+  try {
+    const result = await fetchRun(architecture, task);
+    out.innerHTML = "";
+    out.appendChild(renderResult(result));
+    out.appendChild(renderAxisMap([architecture]));
+  } catch (err) {
+    out.innerHTML = `<div class="banner warn">Run failed: ${esc(err.message)}</div>`;
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function runAll() {
+  const task = document.getElementById("task").value;
+  const out = document.getElementById("output");
+  out.innerHTML = "";
+  const spin = el("p", "spin", `Running all three on "${esc(task)}"…`);
+  out.appendChild(spin);
+  setBusy(true);
+  const results = [];
+  try {
+    for (const name of META.architectures) {
+      spin.textContent = `Running ${name} on "${task}"… (${results.length + 1}/${META.architectures.length})`;
+      const result = await fetchRun(name, task);
+      results.push(result);
+      out.appendChild(renderResult(result));
+    }
+    spin.remove();
+    out.appendChild(renderTokenCompare(results));
+    out.appendChild(renderAxisMap(results.map((r) => r.architecture)));
+  } catch (err) {
+    spin.remove();
+    out.appendChild(el("div", "banner warn", `Run failed: ${esc(err.message)}`));
+  } finally {
+    setBusy(false);
+  }
+}
+
+document.getElementById("run-all").onclick = runAll;
+loadMeta();
+</script>
+</body>
+</html>
