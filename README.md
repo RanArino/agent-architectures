@@ -75,6 +75,41 @@ Live runs need `OPENAI_API_KEY` (set it in `.env` as above); the page loads with
 Pick a task, then run one architecture or **Run all three (compare)**. Binds to
 `127.0.0.1` only; `AGENTFLOW_UI_HOST` / `AGENTFLOW_UI_PORT` override host/port.
 
+## Try your own tasks
+
+The preset tasks (`plain`, `single-source`, `compare`) are intentionally short, single-turn
+questions. They make the control structure easy to see, but they are not long enough to show
+where the orchestrator's isolation advantage actually pays off — parallel delegation and summary
+compression only matter when the single loop's context starts to bloat.
+
+**Quick way — pass a free-text question directly:**
+
+```bash
+uv run agentflow single-loop "Research the differences between symbolic AI and neural networks from multiple angles."
+uv run agentflow orchestrator "Research the differences between symbolic AI and neural networks from multiple angles."
+uv run agentflow handoff "Research the differences between symbolic AI and neural networks from multiple angles."
+```
+
+**Deeper way — add a named preset in `src/agent_architectures/fixtures.py`:**
+
+```python
+Task("my-task", "Your longer, multi-step question here."),
+```
+
+Then run `uv run agentflow compare my-task` to see all three architectures on the same input.
+
+**What makes a task reveal the differences:**
+
+| Task shape | What it stresses |
+|---|---|
+| Short, single-source | All three look similar; single loop has least overhead |
+| Multi-source, compare both | Orchestrator's worker isolation starts to matter; single loop accumulates raw tool results |
+| Long, multi-step synthesis | Single loop's context window grows fastest; orchestrator's summaries keep the manager window small; handoff's input filter becomes significant |
+
+The honest limit of the current PoC: tool results are canned local text, so token counts are
+small regardless. For a real comparison, replace the canned tools with live search and give
+the model a question that requires several round trips.
+
 ## What is implemented
 
 | Command | Control | Context ownership | Primitive |
