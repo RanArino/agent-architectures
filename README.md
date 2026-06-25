@@ -8,7 +8,7 @@ three flows side by side makes control location and context ownership easier to 
 than diagrams alone.
 
 It uses real OpenAI model calls and the real OpenAI Agents SDK primitives, but both search
-tools return local canned text. It never calls a search service or a Scaler environment.
+tools return local canned text. It never calls any external search service.
 
 ## Prerequisites
 
